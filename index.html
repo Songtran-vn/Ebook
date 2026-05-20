@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BookStore — Kho Sách Số</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* ===== BIẾN MÀU & THEME ===== */
+    :root {
+      --bg: #0e0c0a;
+      --bg2: #161310;
+      --bg3: #1e1a16;
+      --card: #1a1612;
+      --border: #2e2820;
+      --accent: #d4a853;
+      --accent2: #e8c47a;
+      --accent-dim: rgba(212,168,83,0.15);
+      --text: #f0ebe3;
+      --text2: #b8a99a;
+      --text3: #7a6e65;
+      --red: #e05c5c;
+      --green: #5cb85c;
+      --radius: 12px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ===== UTILITY ===== */
+    .hidden { display: none !important; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 20px; border-radius: 8px; border: none;
+      font-family: inherit; font-size: 14px; font-weight: 500;
+      cursor: pointer; transition: all 0.2s; text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--accent); color: #0e0c0a;
+    }
+    .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+    .btn-outline {
+      background: transparent; color: var(--text2);
+      border: 1px solid var(--border);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-ghost { background: transparent; color: var(--text2); padding: 8px 14px; }
+    .btn-ghost:hover { color: var(--text); background: var(--bg3); }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-danger:hover { opacity: 0.85; }
+    .btn-success { background: var(--green); color: #fff; }
+
+    input, textarea, select {
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px; padding: 10px 14px;
+      font-family: inherit; font-size: 14px; width: 100%;
+      transition: border-color 0.2s;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none; border-color: var(--accent);
+    }
+    label { font-size: 13px; color: var(--text2); margin-bottom: 6px; display: block; }
+
+    /* ===== VIEWS ===== */
+    #view-store, #view-admin { display: none; }
+    #view-store.active, #view-admin.active { display: block; }
+
+    /* ===========================
+       STORE VIEW
+    =========================== */
+    .store-header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .store-header-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .store-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; font-weight: 700;
+      color: var(--accent); letter-spacing: -0.5px;
+    }
+    .store-logo span { color: var(--text); }
+
+    .store-hero {
+      background: linear-gradient(135deg, var(--bg2) 0%, var(--bg3) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 60px 24px;
+      text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .store-hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 60% 60% at 50% 0%, rgba(212,168,83,0.08) 0%, transparent 70%);
+    }
+    .store-hero h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(32px, 5vw, 56px);
+      font-weight: 900; line-height: 1.1;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .store-hero p { color: var(--text2); font-size: 17px; max-width: 500px; margin: 0 auto; }
+
+    .store-main { max-width: 1200px; margin: 0 auto; padding: 48px 24px; }
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px; font-weight: 700; margin-bottom: 32px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .section-title::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    .books-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 24px;
+    }
+
+    .book-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+    .book-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.4), 0 0 0 1px var(--accent-dim);
+    }
+    .book-cover {
+      width: 100%; aspect-ratio: 3/4;
+      object-fit: cover; display: block;
+      background: var(--bg3);
+    }
+    .book-cover-placeholder {
+      width: 100%; aspect-ratio: 3/4;
+      background: linear-gradient(135deg, var(--bg3), var(--border));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 48px;
+    }
+    .book-body { padding: 16px; }
+    .book-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 16px; font-weight: 700;
+      margin-bottom: 8px; line-height: 1.3;
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .book-desc {
+      font-size: 13px; color: var(--text2); margin-bottom: 14px;
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .book-price { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+    .price-sale {
+      font-size: 20px; font-weight: 600; color: var(--accent);
+    }
+    .price-original {
+      font-size: 14px; color: var(--text3);
+      text-decoration: line-through;
+    }
+    .book-actions { display: flex; gap: 8px; }
+    .book-actions .btn { flex: 1; justify-content: center; font-size: 13px; }
+
+    /* Loading skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg3) 25%, var(--border) 50%, var(--bg3) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 6px;
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ===========================
+       MODAL
+    =========================== */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.85);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      backdrop-filter: blur(4px);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      max-width: 520px; width: 100%;
+      max-height: 90vh; overflow-y: auto;
+      transform: scale(0.95);
+      transition: transform 0.25s;
+    }
+    .modal-overlay.open .modal { transform: scale(1); }
+    .modal-header {
+      padding: 24px 24px 0;
+      display: flex; justify-content: space-between; align-items: flex-start;
+    }
+    .modal-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 20px; font-weight: 700; padding-right: 12px;
+    }
+    .modal-close {
+      background: none; border: none; color: var(--text2);
+      font-size: 22px; cursor: pointer; padding: 0; line-height: 1;
+      flex-shrink: 0;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 20px 24px 24px; }
+
+    /* Preview Modal */
+    .preview-content {
+      background: var(--bg3); border-radius: 10px;
+      padding: 20px; font-size: 14px; line-height: 1.8;
+      color: var(--text2); max-height: 300px; overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    /* Purchase Modal */
+    .step { display: none; }
+    .step.active { display: block; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .qr-container {
+      text-align: center; padding: 16px 0;
+    }
+    .qr-img {
+      width: 220px; height: 220px;
+      border-radius: 12px;
+      border: 2px solid var(--border);
+      margin: 0 auto 16px;
+      display: block;
+    }
+    .transfer-info {
+      background: var(--bg3); border-radius: 10px; padding: 16px;
+      margin-bottom: 16px;
+    }
+    .transfer-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 0; font-size: 14px;
+    }
+    .transfer-label { color: var(--text2); }
+    .transfer-value { font-weight: 600; color: var(--accent); }
+    .copy-btn {
+      background: none; border: none; color: var(--text3);
+      cursor: pointer; padding: 2px 6px; border-radius: 4px;
+      font-size: 12px; transition: all 0.2s;
+    }
+    .copy-btn:hover { color: var(--accent); background: var(--accent-dim); }
+
+    .polling-indicator {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; color: var(--text2); font-size: 13px; margin-bottom: 12px;
+    }
+    .dot-spin {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
+
+    .success-state { text-align: center; padding: 16px 0; }
+    .success-icon {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: rgba(92,184,92,0.15);
+      border: 2px solid var(--green);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; margin: 0 auto 16px;
+    }
+    .download-link {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--green); color: #fff;
+      padding: 12px 24px; border-radius: 10px;
+      text-decoration: none; font-weight: 600;
+      margin-top: 12px; transition: opacity 0.2s;
+    }
+    .download-link:hover { opacity: 0.85; }
+
+    /* ===========================
+       ADMIN VIEW
+    =========================== */
+    .admin-layout { display: flex; min-height: 100vh; }
+
+    .admin-sidebar {
+      width: 240px; flex-shrink: 0;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      position: fixed; top: 0; left: 0; height: 100vh; z-index: 50;
+      transition: transform 0.3s;
+    }
+    .sidebar-logo {
+      padding: 24px 20px;
+      font-family: 'Playfair Display', serif;
+      font-size: 18px; font-weight: 700; color: var(--accent);
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-nav { flex: 1; padding: 16px 12px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px;
+      cursor: pointer; color: var(--text2);
+      font-size: 14px; font-weight: 500;
+      transition: all 0.15s; margin-bottom: 4px;
+      border: none; background: none; width: 100%; text-align: left;
+    }
+    .nav-item:hover { background: var(--bg3); color: var(--text); }
+    .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+    .nav-item .icon { font-size: 18px; width: 20px; text-align: center; }
+
+    .admin-main {
+      margin-left: 240px; flex: 1;
+      padding: 0;
+    }
+    .admin-topbar {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 0 24px; height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 40;
+    }
+    .admin-topbar h2 { font-size: 18px; font-weight: 600; }
+    .admin-content { padding: 28px 24px; }
+
+    /* Tab panels */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Stats cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px; margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px;
+    }
+    .stat-label { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 700; color: var(--accent); font-family: 'Playfair Display', serif; }
+    .stat-sub { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+    /* Chart */
+    .chart-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px; margin-bottom: 28px;
+    }
+    .chart-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+
+    /* Data table */
+    .data-table-wrap { overflow-x: auto; }
+    .data-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    .data-table th {
+      background: var(--bg3);
+      padding: 10px 14px; text-align: left;
+      color: var(--text2); font-weight: 500; font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--bg3); }
+
+    .badge {
+      display: inline-block; padding: 3px 10px;
+      border-radius: 20px; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .badge-paid { background: rgba(92,184,92,0.15); color: var(--green); }
+    .badge-pending { background: rgba(212,168,83,0.15); color: var(--accent); }
+    .badge-active { background: rgba(92,184,92,0.15); color: var(--green); }
+    .badge-hidden { background: rgba(122,110,101,0.2); color: var(--text3); }
+
+    /* Admin filters */
+    .filter-bar {
+      display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .filter-bar select, .filter-bar input {
+      width: auto; min-width: 140px;
+    }
+
+    /* Book form */
+    .form-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px; margin-bottom: 24px;
+    }
+    .form-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 20px; }
+    .form-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* Admin login overlay */
+    #admin-login {
+      position: fixed; inset: 0; z-index: 200;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .login-box {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 40px; width: 340px; text-align: center;
+    }
+    .login-box h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px; margin-bottom: 8px;
+    }
+    .login-box p { color: var(--text2); font-size: 14px; margin-bottom: 24px; }
+
+    /* Notification toast */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 2000;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 18px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 14px; min-width: 240px;
+      transform: translateY(80px); opacity: 0;
+      transition: all 0.3s; pointer-events: none;
+      box-shadow: var(--shadow);
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { border-left: 3px solid var(--green); }
+    .toast.error { border-left: 3px solid var(--red); }
+    .toast.info { border-left: 3px solid var(--accent); }
+
+    /* Sidebar mobile toggle */
+    .sidebar-toggle {
+      display: none; background: none; border: none;
+      color: var(--text); font-size: 22px; cursor: pointer;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .form-row, .form-2col { grid-template-columns: 1fr; }
+      .books-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+      .store-main { padding: 32px 16px; }
+
+      .admin-sidebar {
+        transform: translateX(-100%);
+      }
+      .admin-sidebar.open { transform: translateX(0); }
+      .admin-main { margin-left: 0; }
+      .sidebar-toggle { display: block; }
+      .admin-content { padding: 20px 16px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 480px) {
+      .books-grid { grid-template-columns: 1fr 1fr; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .book-actions { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================
+     STORE VIEW
+============================================================ -->
+<div id="view-store">
+  <header class="store-header">
+    <div class="store-header-inner">
+      <div class="store-logo">📚 Book<span>Store</span></div>
+      <a href="?view=admin" class="btn btn-ghost" style="font-size:12px">Admin ⚙️</a>
+    </div>
+  </header>
+
+  <section class="store-hero">
+    <h1>Kho Sách Số Chất Lượng</h1>
+    <p>Khám phá tri thức, phát triển bản thân với bộ sưu tập ebook tuyển chọn</p>
+  </section>
+
+  <main class="store-main">
+    <h2 class="section-title">Tất cả sách</h2>
+    <div id="books-grid" class="books-grid">
+      <!-- Skeleton loading -->
+      <div class="book-card">
+        <div class="skeleton" style="width:100%;aspect-ratio:3/4"></div>
+        <div class="book-body">
+          <div class="skeleton" style="height:18px;margin-bottom:8px"></div>
+          <div class="skeleton" style="height:14px;width:70%;margin-bottom:14px"></div>
+          <div class="skeleton" style="height:36px"></div>
+        </div>
+      </div>
+      <div class="book-card">
+        <div class="skeleton" style="width:100%;aspect-ratio:3/4"></div>
+        <div class="book-body">
+          <div class="skeleton" style="height:18px;margin-bottom:8px"></div>
+          <div class="skeleton" style="height:14px;width:70%;margin-bottom:14px"></div>
+          <div class="skeleton" style="height:36px"></div>
+        </div>
+      </div>
+      <div class="book-card">
+        <div class="skeleton" style="width:100%;aspect-ratio:3/4"></div>
+        <div class="book-body">
+          <div class="skeleton" style="height:18px;margin-bottom:8px"></div>
+          <div class="skeleton" style="height:14px;width:70%;margin-bottom:14px"></div>
+          <div class="skeleton" style="height:36px"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============================================================
+     MODAL: Preview
+============================================================ -->
+<div id="modal-preview" class="modal-overlay">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title" id="preview-title">Đọc thử</div>
+      <button class="modal-close" onclick="closeModal('modal-preview')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
+        📖 Đây là nội dung xem thử — mua để đọc toàn bộ
+      </p>
+      <div class="preview-content" id="preview-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: Purchase
+============================================================ -->
+<div id="modal-purchase" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Mua sách</div>
+      <button class="modal-close" onclick="closePurchaseModal()">×</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Bước 1: Nhập thông tin -->
+      <div id="step-info" class="step active">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+          Nhập thông tin để nhận link download sau khi thanh toán
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Họ tên *</label>
+            <input type="text" id="buyer-name" placeholder="Nguyễn Văn A" />
+          </div>
+          <div class="form-group">
+            <label>Email *</label>
+            <input type="email" id="buyer-email" placeholder="email@example.com" />
+          </div>
+        </div>
+        <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;color:var(--text2)">Sách</div>
+            <div id="purchase-book-title" style="font-weight:600"></div>
+          </div>
+          <div id="purchase-price" style="font-size:22px;font-weight:700;color:var(--accent)"></div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="createOrder()">
+          Tiếp theo →
+        </button>
+      </div>
+
+      <!-- Bước 2: QR thanh toán -->
+      <div id="step-qr" class="step">
+        <div class="qr-container">
+          <img id="qr-img" class="qr-img" src="" alt="QR Code thanh toán" />
+          <p style="font-size:13px;color:var(--text2)">Quét mã QR hoặc chuyển khoản theo thông tin dưới</p>
+        </div>
+        <div class="transfer-info">
+          <div class="transfer-row">
+            <span class="transfer-label">Ngân hàng</span>
+            <span class="transfer-value" id="ti-bank"></span>
+          </div>
+          <div class="transfer-row">
+            <span class="transfer-label">Số tài khoản</span>
+            <span class="transfer-value" id="ti-account"></span>
+            <button class="copy-btn" onclick="copyText(document.getElementById('ti-account').textContent)">📋</button>
+          </div>
+          <div class="transfer-row">
+            <span class="transfer-label">Số tiền</span>
+            <span class="transfer-value" id="ti-amount"></span>
+          </div>
+          <div class="transfer-row">
+            <span class="transfer-label">Nội dung CK</span>
+            <span class="transfer-value" id="ti-content"></span>
+            <button class="copy-btn" onclick="copyText(document.getElementById('ti-content').textContent)">📋</button>
+          </div>
+        </div>
+        <div class="polling-indicator">
+          <div class="dot-spin"></div>
+          <span>Đang chờ xác nhận thanh toán...</span>
+        </div>
+        <p style="font-size:12px;color:var(--text3);text-align:center">
+          Hệ thống tự động xác nhận sau vài giây khi nhận được chuyển khoản
+        </p>
+      </div>
+
+      <!-- Bước 3: Thành công -->
+      <div id="step-success" class="step">
+        <div class="success-state">
+          <div class="success-icon">✅</div>
+          <h3 style="font-family:'Playfair Display',serif;font-size:22px;margin-bottom:8px">
+            Thanh toán thành công!
+          </h3>
+          <p style="color:var(--text2);font-size:14px;margin-bottom:8px">
+            Cảm ơn bạn đã mua sách. Link download của bạn:
+          </p>
+          <a id="download-link" class="download-link" href="#" target="_blank">
+            📥 Tải về ngay
+          </a>
+          <p style="font-size:12px;color:var(--text3);margin-top:12px">
+            Link cũng đã được gửi vào email của bạn (nếu được cấu hình)
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     ADMIN VIEW
+============================================================ -->
+<div id="view-admin">
+  <!-- Login overlay -->
+  <div id="admin-login">
+    <div class="login-box">
+      <h2>🔐 Admin</h2>
+      <p>Nhập mật khẩu để vào trang quản trị</p>
+      <div class="form-group" style="margin-bottom:16px;text-align:left">
+        <label>Mật khẩu</label>
+        <input type="password" id="admin-password" placeholder="••••••••"
+               onkeydown="if(event.key==='Enter')checkAdminLogin()" />
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="checkAdminLogin()">
+        Đăng nhập
+      </button>
+      <div id="login-error" style="color:var(--red);font-size:13px;margin-top:10px;display:none">
+        Sai mật khẩu!
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin layout -->
+  <div class="admin-layout">
+    <aside class="admin-sidebar" id="admin-sidebar">
+      <div class="sidebar-logo">📚 Admin Panel</div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" onclick="showAdminTab('dashboard',this)">
+          <span class="icon">📊</span> Dashboard
+        </button>
+        <button class="nav-item" onclick="showAdminTab('books',this)">
+          <span class="icon">📖</span> Quản lý sách
+        </button>
+        <button class="nav-item" onclick="showAdminTab('orders',this)">
+          <span class="icon">🛒</span> Đơn hàng
+        </button>
+      </nav>
+      <div style="padding:16px 20px;border-top:1px solid var(--border)">
+        <a href="?view=store" class="btn btn-ghost" style="width:100%;justify-content:center;font-size:13px">
+          👁 Xem Store
+        </a>
+      </div>
+    </aside>
+
+    <main class="admin-main">
+      <div class="admin-topbar">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+          <h2 id="tab-title">Dashboard</h2>
+        </div>
+        <button class="btn btn-ghost" onclick="refreshCurrentTab()" style="font-size:13px">🔄 Làm mới</button>
+      </div>
+
+      <div class="admin-content">
+
+        <!-- TAB: DASHBOARD -->
+        <div id="tab-dashboard" class="tab-panel active">
+          <div class="stats-grid" id="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Doanh thu hôm nay</div>
+              <div class="stat-value skeleton" style="height:36px;width:120px"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Đơn hôm nay</div>
+              <div class="stat-value skeleton" style="height:36px;width:80px"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Tổng doanh thu</div>
+              <div class="stat-value skeleton" style="height:36px;width:120px"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Tổng đơn paid</div>
+              <div class="stat-value skeleton" style="height:36px;width:80px"></div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">📈 Doanh thu 7 ngày gần nhất</div>
+            <canvas id="revenue-chart" height="120"></canvas>
+          </div>
+        </div>
+
+        <!-- TAB: BOOKS -->
+        <div id="tab-books" class="tab-panel">
+          <!-- Form thêm/sửa sách -->
+          <div class="form-card" id="book-form-card">
+            <h3 id="book-form-title">➕ Thêm sách mới</h3>
+            <input type="hidden" id="book-edit-id" />
+            <div class="form-2col">
+              <div class="form-group">
+                <label>Tiêu đề *</label>
+                <input type="text" id="book-title" placeholder="Tên sách" />
+              </div>
+              <div class="form-group">
+                <label>URL ảnh bìa</label>
+                <input type="url" id="book-cover" placeholder="https://..." />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Mô tả ngắn</label>
+              <textarea id="book-desc" rows="2" placeholder="Giới thiệu ngắn về sách..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Nội dung xem thử</label>
+              <textarea id="book-preview" rows="4" placeholder="Đoạn trích để độc giả xem thử..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Link Google Drive (ebook) *</label>
+              <input type="url" id="book-drive" placeholder="https://drive.google.com/..." />
+            </div>
+            <div class="form-2col">
+              <div class="form-group">
+                <label>Giá gốc (VNĐ)</label>
+                <input type="number" id="book-original-price" placeholder="150000" />
+              </div>
+              <div class="form-group">
+                <label>Giá bán (VNĐ) *</label>
+                <input type="number" id="book-sale-price" placeholder="99000" />
+              </div>
+            </div>
+            <div style="display:flex;gap:10px">
+              <button class="btn btn-primary" onclick="saveBook()">💾 Lưu sách</button>
+              <button class="btn btn-outline" onclick="clearBookForm()">✕ Huỷ</button>
+            </div>
+          </div>
+
+          <!-- Danh sách sách -->
+          <div class="form-card">
+            <h3>📚 Danh sách sách</h3>
+            <div class="data-table-wrap">
+              <table class="data-table" id="books-table">
+                <thead>
+                  <tr>
+                    <th>Sách</th>
+                    <th>Giá gốc</th>
+                    <th>Giá bán</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="books-tbody">
+                  <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px">Đang tải...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: ORDERS -->
+        <div id="tab-orders" class="tab-panel">
+          <div class="filter-bar">
+            <select id="filter-status" onchange="loadOrders()">
+              <option value="">Tất cả trạng thái</option>
+              <option value="paid">Đã thanh toán</option>
+              <option value="pending">Chờ thanh toán</option>
+            </select>
+            <input type="date" id="filter-date" onchange="loadOrders()" style="width:160px" />
+            <button class="btn btn-outline" onclick="clearOrderFilter()">✕ Xoá filter</button>
+          </div>
+          <div class="form-card" style="padding:0;overflow:hidden">
+            <div class="data-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Mã đơn</th>
+                    <th>Khách hàng</th>
+                    <th>Sách</th>
+                    <th>Số tiền</th>
+                    <th>Trạng thái</th>
+                    <th>Thời gian</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="orders-tbody">
+                  <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px">Đang tải...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /admin-content -->
+    </main>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" class="toast"></div>
+
+<script>
+// ================================================================
+//  CẤU HÌNH — SỬA CÁC GIÁ TRỊ NÀY TRƯỚC KHI DEPLOY
+// ================================================================
+const CONFIG = {
+  // URL của Google Apps Script Web App sau khi deploy
+  API_URL: 'https://script.google.com/macros/s/AKfycbwvQdco7mQEa0CFknGP4tYhdOMbi9H8b3yiVtgsBiOPq20cP_-zZDXPb--bZjehMW5w2A/exec',
+
+  // Thông tin tài khoản nhận tiền (SePay)
+  BANK_CODE: 'MB',          // Mã ngân hàng: MB, VCB, TCB, ACB...
+  ACCOUNT_NUMBER: '1234567890', // Số tài khoản
+
+  // Mật khẩu admin (nên đổi thành chuỗi phức tạp hơn)
+  ADMIN_PASSWORD: 'admin@2024',
+};
+
+// ================================================================
+//  KHỞI TẠO
+// ================================================================
+let currentBook = null;      // Sách đang được mua
+let currentOrderId = null;   // Mã đơn đang chờ thanh toán
+let pollingInterval = null;  // Timer polling kiểm tra thanh toán
+let revenueChart = null;     // Chart.js instance
+let allBooks = [];            // Cache danh sách sách (admin)
+
+// Xác định view dựa trên query param ?view=
+function initApp() {
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get('view') || 'store';
+
+  if (view === 'admin') {
+    document.getElementById('view-admin').classList.add('active');
+    // Không load gì cho đến khi login thành công
+  } else {
+    document.getElementById('view-store').classList.add('active');
+    loadBooks();
+  }
+}
+
+// ================================================================
+//  STORE: TẢI DANH SÁCH SÁCH
+// ================================================================
+async function loadBooks() {
+  try {
+    const res = await fetch(`${CONFIG.API_URL}?action=getBooks`);
+    const data = await res.json();
+    renderBooks(data.books || []);
+  } catch (e) {
+    document.getElementById('books-grid').innerHTML =
+      '<p style="color:var(--text2);text-align:center;padding:32px">Không thể tải sách. Vui lòng thử lại.</p>';
+  }
+}
+
+function renderBooks(books) {
+  const grid = document.getElementById('books-grid');
+  if (!books.length) {
+    grid.innerHTML = '<p style="color:var(--text2);text-align:center;padding:32px">Chưa có sách nào.</p>';
+    return;
+  }
+  grid.innerHTML = books.map(b => `
+    <div class="book-card">
+      ${b.cover_url
+        ? `<img class="book-cover" src="${escHtml(b.cover_url)}" alt="${escHtml(b.title)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        : ''}
+      <div class="book-cover-placeholder" ${b.cover_url ? 'style="display:none"' : ''}>📖</div>
+      <div class="book-body">
+        <div class="book-title">${escHtml(b.title)}</div>
+        <div class="book-desc">${escHtml(b.description || '')}</div>
+        <div class="book-price">
+          <span class="price-sale">${formatVND(b.sale_price)}</span>
+          ${b.original_price > b.sale_price
+            ? `<span class="price-original">${formatVND(b.original_price)}</span>` : ''}
+        </div>
+        <div class="book-actions">
+          <button class="btn btn-outline" onclick="openPreview(${JSON.stringify(b).replace(/"/g,'&quot;')})">Đọc thử</button>
+          <button class="btn btn-primary" onclick="openPurchase(${JSON.stringify(b).replace(/"/g,'&quot;')})">Mua ngay</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ================================================================
+//  STORE: MODAL XEM THỬ
+// ================================================================
+function openPreview(book) {
+  document.getElementById('preview-title').textContent = `📖 ${book.title}`;
+  document.getElementById('preview-body').textContent = book.preview_content || 'Chưa có nội dung xem thử.';
+  openModal('modal-preview');
+}
+
+// ================================================================
+//  STORE: LUỒNG MUA SÁCH
+// ================================================================
+function openPurchase(book) {
+  currentBook = book;
+  // Reset về bước 1
+  document.getElementById('step-info').classList.add('active');
+  document.getElementById('step-qr').classList.remove('active');
+  document.getElementById('step-success').classList.remove('active');
+  document.getElementById('buyer-name').value = '';
+  document.getElementById('buyer-email').value = '';
+  document.getElementById('purchase-book-title').textContent = book.title;
+  document.getElementById('purchase-price').textContent = formatVND(book.sale_price);
+  openModal('modal-purchase');
+}
+
+// Tạo đơn hàng trên server
+async function createOrder() {
+  const name = document.getElementById('buyer-name').value.trim();
+  const email = document.getElementById('buyer-email').value.trim();
+  if (!name) return showToast('Vui lòng nhập họ tên', 'error');
+  if (!email || !email.includes('@')) return showToast('Email không hợp lệ', 'error');
+
+  try {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'createOrder',
+        book_id: currentBook.id,
+        name, email
+      })
+    });
+    const data = await res.json();
+    if (!data.order_id) throw new Error(data.error || 'Lỗi tạo đơn');
+
+    currentOrderId = data.order_id;
+    showQRStep(data.order_id, currentBook.sale_price);
+  } catch (e) {
+    showToast('Lỗi: ' + e.message, 'error');
+  }
+}
+
+// Hiển thị bước QR
+function showQRStep(orderId, amount) {
+  // Tạo URL QR SePay
+  const qrUrl = `https://qr.sepay.vn/img?bank=${CONFIG.BANK_CODE}&acc=${CONFIG.ACCOUNT_NUMBER}&template=compact&amount=${amount}&des=${orderId}`;
+  document.getElementById('qr-img').src = qrUrl;
+  document.getElementById('ti-bank').textContent = CONFIG.BANK_CODE;
+  document.getElementById('ti-account').textContent = CONFIG.ACCOUNT_NUMBER;
+  document.getElementById('ti-amount').textContent = formatVND(amount);
+  document.getElementById('ti-content').textContent = orderId;
+
+  // Chuyển sang bước 2
+  document.getElementById('step-info').classList.remove('active');
+  document.getElementById('step-qr').classList.add('active');
+
+  // Bắt đầu polling kiểm tra thanh toán
+  startPolling(orderId);
+}
+
+// Polling mỗi 5 giây kiểm tra trạng thái đơn
+function startPolling(orderId) {
+  stopPolling();
+  pollingInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`${CONFIG.API_URL}?action=checkOrder&order_id=${orderId}`);
+      const data = await res.json();
+      if (data.status === 'paid') {
+        stopPolling();
+        showSuccessStep(data.drive_link);
+      }
+    } catch (e) { /* Bỏ qua lỗi mạng, thử lại lần sau */ }
+  }, 5000);
+}
+
+function stopPolling() {
+  if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
+}
+
+// Hiển thị bước thành công
+function showSuccessStep(driveLink) {
+  document.getElementById('step-qr').classList.remove('active');
+  document.getElementById('step-success').classList.add('active');
+  document.getElementById('download-link').href = driveLink;
+  showToast('🎉 Thanh toán thành công!', 'success');
+}
+
+function closePurchaseModal() {
+  stopPolling();
+  closeModal('modal-purchase');
+}
+
+// ================================================================
+//  ADMIN: ĐĂNG NHẬP
+// ================================================================
+function checkAdminLogin() {
+  const pw = document.getElementById('admin-password').value;
+  if (pw === CONFIG.ADMIN_PASSWORD) {
+    document.getElementById('admin-login').classList.add('hidden');
+    loadDashboard(); // Load data đầu tiên
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+    setTimeout(() => document.getElementById('login-error').style.display = 'none', 2000);
+  }
+}
+
+// ================================================================
+//  ADMIN: ĐIỀU HƯỚNG TAB
+// ================================================================
+function showAdminTab(tab, btn) {
+  // Ẩn tất cả panels
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  btn.classList.add('active');
+
+  const titles = { dashboard: 'Dashboard', books: 'Quản lý sách', orders: 'Đơn hàng' };
+  document.getElementById('tab-title').textContent = titles[tab];
+
+  // Load data theo tab
+  if (tab === 'dashboard') loadDashboard();
+  else if (tab === 'books') loadAdminBooks();
+  else if (tab === 'orders') loadOrders();
+}
+
+function refreshCurrentTab() {
+  const active = document.querySelector('.nav-item.active');
+  if (active) active.click();
+}
+
+function toggleSidebar() {
+  document.getElementById('admin-sidebar').classList.toggle('open');
+}
+
+// ================================================================
+//  ADMIN: DASHBOARD
+// ================================================================
+async function loadDashboard() {
+  try {
+    const res = await fetch(`${CONFIG.API_URL}?action=getStats`);
+    const data = await res.json();
+    renderStats(data);
+    renderChart(data.chart || []);
+  } catch (e) {
+    showToast('Lỗi tải dashboard', 'error');
+  }
+}
+
+function renderStats(data) {
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Doanh thu hôm nay</div>
+      <div class="stat-value">${formatVND(data.today_revenue || 0)}</div>
+      <div class="stat-sub">${data.today_paid || 0} đơn thành công</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Chờ thanh toán hôm nay</div>
+      <div class="stat-value" style="color:var(--accent)">${data.today_pending || 0}</div>
+      <div class="stat-sub">đơn pending</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Tổng doanh thu</div>
+      <div class="stat-value">${formatVND(data.total_revenue || 0)}</div>
+      <div class="stat-sub">toàn thời gian</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Tổng đơn paid</div>
+      <div class="stat-value">${data.total_paid || 0}</div>
+      <div class="stat-sub">${data.total_pending || 0} đơn pending</div>
+    </div>
+  `;
+}
+
+function renderChart(chartData) {
+  const ctx = document.getElementById('revenue-chart').getContext('2d');
+  if (revenueChart) revenueChart.destroy();
+  revenueChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: chartData.map(d => d.date),
+      datasets: [{
+        label: 'Doanh thu (VNĐ)',
+        data: chartData.map(d => d.revenue),
+        backgroundColor: 'rgba(212,168,83,0.3)',
+        borderColor: '#d4a853',
+        borderWidth: 2,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#7a6e65' }, grid: { color: '#2e2820' } },
+        y: { ticks: { color: '#7a6e65', callback: v => formatVND(v) }, grid: { color: '#2e2820' } }
+      }
+    }
+  });
+}
+
+// ================================================================
+//  ADMIN: QUẢN LÝ SÁCH
+// ================================================================
+async function loadAdminBooks() {
+  try {
+    const res = await fetch(`${CONFIG.API_URL}?action=getAllBooks`);
+    const data = await res.json();
+    allBooks = data.books || [];
+    renderAdminBooks(allBooks);
+  } catch (e) {
+    showToast('Lỗi tải danh sách sách', 'error');
+  }
+}
+
+function renderAdminBooks(books) {
+  const tbody = document.getElementById('books-tbody');
+  if (!books.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px">Chưa có sách nào</td></tr>';
+    return;
+  }
+  tbody.innerHTML = books.map(b => `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          ${b.cover_url ? `<img src="${escHtml(b.cover_url)}" style="width:36px;height:48px;object-fit:cover;border-radius:4px" />` : '<div style="width:36px;height:48px;background:var(--bg3);border-radius:4px;display:flex;align-items:center;justify-content:center">📖</div>'}
+          <div>
+            <div style="font-weight:500">${escHtml(b.title)}</div>
+            <div style="font-size:12px;color:var(--text3)">#${b.id}</div>
+          </div>
+        </div>
+      </td>
+      <td style="color:var(--text2)">${formatVND(b.original_price)}</td>
+      <td style="color:var(--accent);font-weight:600">${formatVND(b.sale_price)}</td>
+      <td><span class="badge badge-${b.status === 'active' ? 'active' : 'hidden'}">${b.status === 'active' ? 'Hiện' : 'Ẩn'}</span></td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="editBook(${b.id})">✏️</button>
+          <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="toggleBookStatus(${b.id},'${b.status}')">
+            ${b.status === 'active' ? '🙈 Ẩn' : '👁 Hiện'}
+          </button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function editBook(id) {
+  const b = allBooks.find(b => b.id == id);
+  if (!b) return;
+  document.getElementById('book-form-title').textContent = '✏️ Sửa sách';
+  document.getElementById('book-edit-id').value = b.id;
+  document.getElementById('book-title').value = b.title;
+  document.getElementById('book-cover').value = b.cover_url || '';
+  document.getElementById('book-desc').value = b.description || '';
+  document.getElementById('book-preview').value = b.preview_content || '';
+  document.getElementById('book-drive').value = b.drive_link || '';
+  document.getElementById('book-original-price').value = b.original_price || '';
+  document.getElementById('book-sale-price').value = b.sale_price || '';
+  document.getElementById('book-form-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function clearBookForm() {
+  document.getElementById('book-form-title').textContent = '➕ Thêm sách mới';
+  document.getElementById('book-edit-id').value = '';
+  ['book-title','book-cover','book-desc','book-preview','book-drive','book-original-price','book-sale-price']
+    .forEach(id => document.getElementById(id).value = '');
+}
+
+async function saveBook() {
+  const title = document.getElementById('book-title').value.trim();
+  const salePrice = document.getElementById('book-sale-price').value;
+  const driveLink = document.getElementById('book-drive').value.trim();
+  if (!title) return showToast('Vui lòng nhập tiêu đề', 'error');
+  if (!salePrice) return showToast('Vui lòng nhập giá bán', 'error');
+  if (!driveLink) return showToast('Vui lòng nhập link Drive', 'error');
+
+  const editId = document.getElementById('book-edit-id').value;
+  const payload = {
+    action: editId ? 'updateBook' : 'createBook',
+    id: editId || undefined,
+    title,
+    cover_url: document.getElementById('book-cover').value.trim(),
+    description: document.getElementById('book-desc').value.trim(),
+    preview_content: document.getElementById('book-preview').value.trim(),
+    drive_link: driveLink,
+    original_price: document.getElementById('book-original-price').value || salePrice,
+    sale_price: salePrice,
+  };
+
+  try {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(editId ? 'Đã cập nhật sách!' : 'Đã thêm sách mới!', 'success');
+      clearBookForm();
+      loadAdminBooks();
+    } else throw new Error(data.error);
+  } catch (e) {
+    showToast('Lỗi: ' + e.message, 'error');
+  }
+}
+
+async function toggleBookStatus(id, currentStatus) {
+  const newStatus = currentStatus === 'active' ? 'hidden' : 'active';
+  try {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateBookStatus', id, status: newStatus })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Đã cập nhật trạng thái', 'success');
+      loadAdminBooks();
+    }
+  } catch (e) {
+    showToast('Lỗi cập nhật', 'error');
+  }
+}
+
+// ================================================================
+//  ADMIN: QUẢN LÝ ĐƠN HÀNG
+// ================================================================
+async function loadOrders() {
+  const status = document.getElementById('filter-status').value;
+  const date = document.getElementById('filter-date').value;
+  let url = `${CONFIG.API_URL}?action=getOrders`;
+  if (status) url += `&status=${status}`;
+  if (date) url += `&date=${date}`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    renderOrders(data.orders || []);
+  } catch (e) {
+    showToast('Lỗi tải đơn hàng', 'error');
+  }
+}
+
+function renderOrders(orders) {
+  const tbody = document.getElementById('orders-tbody');
+  if (!orders.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px">Không có đơn hàng nào</td></tr>';
+    return;
+  }
+  tbody.innerHTML = orders.map(o => `
+    <tr>
+      <td style="font-family:monospace;font-size:12px;color:var(--accent)">${escHtml(o.order_id)}</td>
+      <td>
+        <div style="font-weight:500">${escHtml(o.buyer_name)}</div>
+        <div style="font-size:12px;color:var(--text3)">${escHtml(o.buyer_email)}</div>
+      </td>
+      <td style="font-size:13px">${escHtml(o.book_title || o.book_id)}</td>
+      <td style="color:var(--accent);font-weight:600">${formatVND(o.amount)}</td>
+      <td><span class="badge badge-${o.status}">${o.status === 'paid' ? '✅ Đã TT' : '⏳ Chờ TT'}</span></td>
+      <td style="font-size:12px;color:var(--text2)">${formatDate(o.created_at)}</td>
+      <td>
+        ${o.status === 'pending'
+          ? `<button class="btn btn-success" style="padding:5px 10px;font-size:12px" onclick="markOrderPaid('${o.order_id}')">✓ Đánh dấu TT</button>`
+          : '<span style="font-size:12px;color:var(--text3)">—</span>'}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function clearOrderFilter() {
+  document.getElementById('filter-status').value = '';
+  document.getElementById('filter-date').value = '';
+  loadOrders();
+}
+
+async function markOrderPaid(orderId) {
+  if (!confirm(`Đánh dấu đơn ${orderId} là đã thanh toán?`)) return;
+  try {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateOrder', order_id: orderId, status: 'paid' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Đã cập nhật trạng thái đơn', 'success');
+      loadOrders();
+    }
+  } catch (e) {
+    showToast('Lỗi cập nhật đơn', 'error');
+  }
+}
+
+// ================================================================
+//  HELPER FUNCTIONS
+// ================================================================
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Đóng modal khi click ra ngoài
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) {
+      if (overlay.id === 'modal-purchase') closePurchaseModal();
+      else closeModal(overlay.id);
+    }
+  });
+});
+
+function formatVND(n) {
+  if (!n && n !== 0) return '—';
+  return Number(n).toLocaleString('vi-VN') + '₫';
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleString('vi-VN', { hour12: false });
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => showToast('Đã copy!', 'info'));
+}
+
+let toastTimer;
+function showToast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  const icons = { success: '✅', error: '❌', info: '💡' };
+  el.textContent = `${icons[type] || ''} ${msg}`;
+  el.className = `toast ${type} show`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ================================================================
+//  KHỞI CHẠY
+// ================================================================
+initApp();
+</script>
+</body>
+</html>
