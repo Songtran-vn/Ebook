@@ -701,9 +701,12 @@
         </button>
       </nav>
       <div style="padding:16px 20px;border-top:1px solid var(--border)">
-        <a href="?view=store" class="btn btn-ghost" style="width:100%;justify-content:center;font-size:13px">
+        <a href="?view=store" class="btn btn-ghost" style="width:100%;justify-content:center;font-size:13px;margin-bottom:6px">
           👁 Xem Store
         </a>
+        <button onclick="adminLogout()" class="btn btn-ghost" style="width:100%;justify-content:center;font-size:12px;color:var(--text3)">
+          🚪 Đăng xuất
+        </button>
       </div>
     </aside>
 
@@ -882,7 +885,7 @@
 // ================================================================
 const CONFIG = {
   // URL của Google Apps Script Web App sau khi deploy
-  API_URL: 'https://script.google.com/macros/s/AKfycbw0UZCW0C0qeO8wT0Gqz_8LNwqm3gxseFORUK23b1pnIsTQBdLgIBrR_ARwygHZb3KLnQ/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbysMEQR-GA2-IxOzELtZb1mxMtOnWQf_hHNBqxyefMLZc-MnKOLgARMqMQz1XnM8hJJ0g/exec',
 
   // Thông tin tài khoản nhận tiền (SePay)
   BANK_CODE: 'MB',          // Mã ngân hàng: MB, VCB, TCB, ACB...
@@ -908,7 +911,10 @@ function initApp() {
 
   if (view === 'admin') {
     document.getElementById('view-admin').classList.add('active');
-    // Không load gì cho đến khi login thành công
+    if (sessionStorage.getItem('admin_authed') === '1') {
+      document.getElementById('admin-login').classList.add('hidden');
+      loadDashboard();
+    }
   } else {
     document.getElementById('view-store').classList.add('active');
     loadBooks();
@@ -1065,12 +1071,18 @@ function closePurchaseModal() {
 function checkAdminLogin() {
   const pw = document.getElementById('admin-password').value;
   if (pw === CONFIG.ADMIN_PASSWORD) {
+    sessionStorage.setItem('admin_authed', '1');
     document.getElementById('admin-login').classList.add('hidden');
-    loadDashboard(); // Load data đầu tiên
+    loadDashboard();
   } else {
     document.getElementById('login-error').style.display = 'block';
     setTimeout(() => document.getElementById('login-error').style.display = 'none', 2000);
   }
+}
+
+function adminLogout() {
+  sessionStorage.removeItem('admin_authed');
+  location.reload();
 }
 
 // ================================================================
@@ -1106,13 +1118,23 @@ function toggleSidebar() {
 //  ADMIN: DASHBOARD
 // ================================================================
 async function loadDashboard() {
+  if (!CONFIG.API_URL || CONFIG.API_URL.includes('YOUR_DEPLOYMENT_ID')) {
+    document.getElementById('stats-grid').innerHTML =
+      '<div style="grid-column:1/-1;padding:16px;color:var(--red);font-size:13px;background:var(--card);border-radius:10px">' +
+      '❌ Chưa điền <b>API_URL</b> trong CONFIG của index.html.<br>' +
+      'Mở file → tìm <code>const CONFIG</code> → điền URL Apps Script Web App.</div>';
+    return;
+  }
   try {
     const res = await fetch(`${CONFIG.API_URL}?action=getStats`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    if (data.error) throw new Error(data.error);
     renderStats(data);
     renderChart(data.chart || []);
   } catch (e) {
-    showToast('Lỗi tải dashboard', 'error');
+    showToast('Lỗi tải dashboard: ' + e.message, 'error');
+    console.error('[Dashboard error]', e);
   }
 }
 
@@ -1172,13 +1194,20 @@ function renderChart(chartData) {
 //  ADMIN: QUẢN LÝ SÁCH
 // ================================================================
 async function loadAdminBooks() {
+  if (!CONFIG.API_URL || CONFIG.API_URL.includes('YOUR_DEPLOYMENT_ID')) {
+    showToast('⚠️ Chưa cấu hình API_URL', 'error');
+    return;
+  }
   try {
     const res = await fetch(`${CONFIG.API_URL}?action=getAllBooks`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    if (data.error) throw new Error(data.error);
     allBooks = data.books || [];
     renderAdminBooks(allBooks);
   } catch (e) {
-    showToast('Lỗi tải danh sách sách', 'error');
+    showToast('Lỗi tải sách: ' + e.message, 'error');
+    console.error('[Books error]', e);
   }
 }
 
@@ -1399,67 +1428,69 @@ function showToast(msg, type = 'info') {
 
 
 // ================================================================
-//  COVER IMAGE UPLOAD (Imgur API — miễn phí, không cần server)
+//  COVER IMAGE UPLOAD — Upload lên Google Drive qua Apps Script
+//  Không cần service bên ngoài, dùng cùng Apps Script đang có
 // ================================================================
-
-// Client ID của Imgur (free, tạo tại https://api.imgur.com/oauth2/addclient)
-// Đây là Client ID demo — nên tạo Client ID riêng để tránh rate limit
-const IMGUR_CLIENT_ID = 'f4a4d0de1bae45a'; // Thay bằng Client ID của bạn nếu muốn
 
 async function handleCoverUpload(input) {
   const file = input.files[0];
   if (!file) return;
 
-  // Kiểm tra loại file
   if (!file.type.startsWith('image/')) {
     return showToast('Chỉ hỗ trợ file ảnh (JPG, PNG, WEBP...)', 'error');
   }
-
-  // Giới hạn 10MB
-  if (file.size > 10 * 1024 * 1024) {
-    return showToast('Ảnh quá lớn, tối đa 10MB', 'error');
+  if (file.size > 5 * 1024 * 1024) {
+    return showToast('Ảnh quá lớn, tối đa 5MB', 'error');
   }
 
-  // Hiện preview ngay lập tức từ local (trước khi upload xong)
-  const localUrl = URL.createObjectURL(file);
-  showCoverPreview(localUrl);
-
-  // Bắt đầu upload
-  setUploadStatus('⏳ Đang tải ảnh lên...', 'var(--accent)');
+  // Hiện preview local ngay lập tức
+  showCoverPreview(URL.createObjectURL(file));
+  setUploadStatus('⏳ Đang tải ảnh lên Drive...', 'var(--accent)');
   document.getElementById('cover-preview-wrap').classList.add('uploading');
+  document.getElementById('book-cover').value = '';
 
   try {
-    const formData = new FormData();
-    formData.append('image', file);
+    // Đọc file thành base64
+    const base64 = await fileToBase64(file);
 
-    const res = await fetch('https://api.imgur.com/3/image', {
-      method: 'POST',
-      headers: { Authorization: 'Client-ID ' + IMGUR_CLIENT_ID },
-      body: formData,
-    });
+    // Gửi lên Apps Script để lưu vào Google Drive
+    const url = CONFIG.API_URL
+      + '?action=uploadImage'
+      + '&data=' + encodeURIComponent(JSON.stringify({
+          filename: file.name,
+          mimeType: file.type,
+          base64: base64,
+        }));
 
+    const res = await fetch(url);
     const json = await res.json();
 
-    if (json.success && json.data?.link) {
-      const imgurUrl = json.data.link;
-      document.getElementById('book-cover').value = imgurUrl;
-      showCoverPreview(imgurUrl);
+    if (json.url) {
+      document.getElementById('book-cover').value = json.url;
+      showCoverPreview(json.url);
       setUploadStatus('✅ Upload thành công!', 'var(--green)');
-      showToast('Ảnh đã được upload', 'success');
+      showToast('Ảnh đã lưu lên Drive', 'success');
     } else {
-      throw new Error(json.data?.error || 'Upload thất bại');
+      throw new Error(json.error || 'Upload thất bại');
     }
   } catch (err) {
-    // Nếu Imgur lỗi, vẫn giữ local preview và thông báo
-    setUploadStatus('⚠️ Upload lỗi — ảnh chỉ hiện tạm thời', 'var(--red)');
-    showToast('Imgur lỗi: ' + err.message, 'error');
-    // Vẫn giữ objectURL trong input để admin biết đã chọn file
+    setUploadStatus('❌ Lỗi: ' + err.message, 'var(--red)');
+    showToast('Upload lỗi: ' + err.message, 'error');
     document.getElementById('book-cover').value = '';
   } finally {
     document.getElementById('cover-preview-wrap').classList.remove('uploading');
-    // Reset file input để có thể chọn lại cùng file
     input.value = '';
   }
+}
+
+// Đọc file thành chuỗi base64 (bỏ phần "data:image/...;base64,")
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function showCoverPreview(url) {
