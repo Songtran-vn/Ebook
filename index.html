@@ -479,6 +479,23 @@
       .stats-grid { grid-template-columns: 1fr 1fr; }
       .book-actions { flex-direction: column; }
     }
+
+    /* ===== COVER UPLOAD WIDGET ===== */
+    .cover-upload-wrap {
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .cover-preview-box {
+      width: 90px; height: 120px; flex-shrink: 0;
+      border: 2px dashed var(--border); border-radius: 8px;
+      cursor: pointer; overflow: hidden;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 4px;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--bg3);
+    }
+    .cover-preview-box:hover { border-color: var(--accent); background: var(--accent-dim); }
+    .cover-preview-box.uploading { border-color: var(--accent); animation: border-pulse 1s infinite; }
+    @keyframes border-pulse { 0%,100% { border-color: var(--accent); } 50% { border-color: var(--border); } }
   </style>
 </head>
 <body>
@@ -739,8 +756,33 @@
                 <input type="text" id="book-title" placeholder="Tên sách" />
               </div>
               <div class="form-group">
-                <label>URL ảnh bìa</label>
-                <input type="url" id="book-cover" placeholder="https://..." />
+                <label>Ảnh bìa</label>
+                <div class="cover-upload-wrap">
+                  <!-- Preview ảnh -->
+                  <div id="cover-preview-wrap" class="cover-preview-box" onclick="document.getElementById('cover-file-input').click()">
+                    <img id="cover-preview-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:8px" />
+                    <div id="cover-preview-placeholder">
+                      <span style="font-size:28px">🖼️</span>
+                      <span style="font-size:12px;color:var(--text2);margin-top:4px">Nhấn để chọn ảnh</span>
+                    </div>
+                  </div>
+                  <!-- Input file ẩn -->
+                  <input type="file" id="cover-file-input" accept="image/*" style="display:none" onchange="handleCoverUpload(this)" />
+                  <!-- URL input (tự điền sau khi upload, hoặc paste thủ công) -->
+                  <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+                    <input type="url" id="book-cover" placeholder="URL tự điền sau khi upload..." readonly
+                           style="background:var(--bg);font-size:12px;color:var(--text2)" />
+                    <div style="display:flex;gap:6px">
+                      <button type="button" class="btn btn-outline" style="flex:1;justify-content:center;font-size:12px;padding:7px 10px"
+                              onclick="document.getElementById('cover-file-input').click()">
+                        📁 Chọn ảnh
+                      </button>
+                      <button type="button" class="btn btn-ghost" style="font-size:12px;padding:7px 10px"
+                              onclick="clearCoverImage()" title="Xoá ảnh">✕</button>
+                    </div>
+                    <div id="cover-upload-status" style="font-size:11px;color:var(--text3);min-height:16px"></div>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="form-group">
@@ -840,7 +882,7 @@
 // ================================================================
 const CONFIG = {
   // URL của Google Apps Script Web App sau khi deploy
-  API_URL: 'https://script.google.com/macros/s/AKfycbwvQdco7mQEa0CFknGP4tYhdOMbi9H8b3yiVtgsBiOPq20cP_-zZDXPb--bZjehMW5w2A/exec',
+  API_URL: 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec',
 
   // Thông tin tài khoản nhận tiền (SePay)
   BANK_CODE: 'MB',          // Mã ngân hàng: MB, VCB, TCB, ACB...
@@ -941,6 +983,15 @@ function openPurchase(book) {
   openModal('modal-purchase');
 }
 
+// Helper: gọi API qua GET để tránh lỗi CORS preflight của POST
+async function apiCall(action, data = {}) {
+  const url = CONFIG.API_URL
+    + '?action=' + encodeURIComponent(action)
+    + '&data=' + encodeURIComponent(JSON.stringify(data));
+  const res = await fetch(url);
+  return res.json();
+}
+
 // Tạo đơn hàng trên server
 async function createOrder() {
   const name = document.getElementById('buyer-name').value.trim();
@@ -949,18 +1000,8 @@ async function createOrder() {
   if (!email || !email.includes('@')) return showToast('Email không hợp lệ', 'error');
 
   try {
-    const res = await fetch(CONFIG.API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'createOrder',
-        book_id: currentBook.id,
-        name, email
-      })
-    });
-    const data = await res.json();
+    const data = await apiCall('createOrder', { book_id: currentBook.id, name, email });
     if (!data.order_id) throw new Error(data.error || 'Lỗi tạo đơn');
-
     currentOrderId = data.order_id;
     showQRStep(data.order_id, currentBook.sale_price);
   } catch (e) {
@@ -1217,12 +1258,7 @@ async function saveBook() {
   };
 
   try {
-    const res = await fetch(CONFIG.API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
+    const data = await apiCall(payload.action, payload);
     if (data.success) {
       showToast(editId ? 'Đã cập nhật sách!' : 'Đã thêm sách mới!', 'success');
       clearBookForm();
@@ -1236,12 +1272,7 @@ async function saveBook() {
 async function toggleBookStatus(id, currentStatus) {
   const newStatus = currentStatus === 'active' ? 'hidden' : 'active';
   try {
-    const res = await fetch(CONFIG.API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'updateBookStatus', id, status: newStatus })
-    });
-    const data = await res.json();
+    const data = await apiCall('updateBookStatus', { id, status: newStatus });
     if (data.success) {
       showToast('Đã cập nhật trạng thái', 'success');
       loadAdminBooks();
@@ -1305,12 +1336,7 @@ function clearOrderFilter() {
 async function markOrderPaid(orderId) {
   if (!confirm(`Đánh dấu đơn ${orderId} là đã thanh toán?`)) return;
   try {
-    const res = await fetch(CONFIG.API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'updateOrder', order_id: orderId, status: 'paid' })
-    });
-    const data = await res.json();
+    const data = await apiCall('updateOrder', { order_id: orderId, status: 'paid' });
     if (data.success) {
       showToast('Đã cập nhật trạng thái đơn', 'success');
       loadOrders();
@@ -1370,6 +1396,113 @@ function showToast(msg, type = 'info') {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
 }
+
+
+// ================================================================
+//  COVER IMAGE UPLOAD (Imgur API — miễn phí, không cần server)
+// ================================================================
+
+// Client ID của Imgur (free, tạo tại https://api.imgur.com/oauth2/addclient)
+// Đây là Client ID demo — nên tạo Client ID riêng để tránh rate limit
+const IMGUR_CLIENT_ID = 'f4a4d0de1bae45a'; // Thay bằng Client ID của bạn nếu muốn
+
+async function handleCoverUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // Kiểm tra loại file
+  if (!file.type.startsWith('image/')) {
+    return showToast('Chỉ hỗ trợ file ảnh (JPG, PNG, WEBP...)', 'error');
+  }
+
+  // Giới hạn 10MB
+  if (file.size > 10 * 1024 * 1024) {
+    return showToast('Ảnh quá lớn, tối đa 10MB', 'error');
+  }
+
+  // Hiện preview ngay lập tức từ local (trước khi upload xong)
+  const localUrl = URL.createObjectURL(file);
+  showCoverPreview(localUrl);
+
+  // Bắt đầu upload
+  setUploadStatus('⏳ Đang tải ảnh lên...', 'var(--accent)');
+  document.getElementById('cover-preview-wrap').classList.add('uploading');
+
+  try {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const res = await fetch('https://api.imgur.com/3/image', {
+      method: 'POST',
+      headers: { Authorization: 'Client-ID ' + IMGUR_CLIENT_ID },
+      body: formData,
+    });
+
+    const json = await res.json();
+
+    if (json.success && json.data?.link) {
+      const imgurUrl = json.data.link;
+      document.getElementById('book-cover').value = imgurUrl;
+      showCoverPreview(imgurUrl);
+      setUploadStatus('✅ Upload thành công!', 'var(--green)');
+      showToast('Ảnh đã được upload', 'success');
+    } else {
+      throw new Error(json.data?.error || 'Upload thất bại');
+    }
+  } catch (err) {
+    // Nếu Imgur lỗi, vẫn giữ local preview và thông báo
+    setUploadStatus('⚠️ Upload lỗi — ảnh chỉ hiện tạm thời', 'var(--red)');
+    showToast('Imgur lỗi: ' + err.message, 'error');
+    // Vẫn giữ objectURL trong input để admin biết đã chọn file
+    document.getElementById('book-cover').value = '';
+  } finally {
+    document.getElementById('cover-preview-wrap').classList.remove('uploading');
+    // Reset file input để có thể chọn lại cùng file
+    input.value = '';
+  }
+}
+
+function showCoverPreview(url) {
+  const img = document.getElementById('cover-preview-img');
+  const placeholder = document.getElementById('cover-preview-placeholder');
+  img.src = url;
+  img.style.display = 'block';
+  placeholder.style.display = 'none';
+}
+
+function clearCoverImage() {
+  document.getElementById('book-cover').value = '';
+  document.getElementById('cover-preview-img').src = '';
+  document.getElementById('cover-preview-img').style.display = 'none';
+  document.getElementById('cover-preview-placeholder').style.display = 'flex';
+  setUploadStatus('', '');
+}
+
+function setUploadStatus(msg, color) {
+  const el = document.getElementById('cover-upload-status');
+  el.textContent = msg;
+  el.style.color = color;
+}
+
+// Khi edit sách — hiện ảnh bìa hiện tại lên preview
+const _origEditBook = editBook;
+editBook = function(id) {
+  _origEditBook(id);
+  const b = allBooks.find(b => b.id == id);
+  if (b && b.cover_url) {
+    showCoverPreview(b.cover_url);
+    setUploadStatus('Ảnh hiện tại — upload mới để thay', 'var(--text3)');
+  } else {
+    clearCoverImage();
+  }
+};
+
+// Khi clearBookForm — reset preview
+const _origClearBookForm = clearBookForm;
+clearBookForm = function() {
+  _origClearBookForm();
+  clearCoverImage();
+};
 
 // ================================================================
 //  KHỞI CHẠY
